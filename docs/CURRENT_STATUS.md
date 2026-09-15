@@ -22,7 +22,7 @@ Phase 0 (setup) → Phase 1 (playable foundation) transition.
 - [x] Git repo initialized, .gitignore confirmed to exclude .env.local
 - [x] profiles + clubs tables created with RLS, tested (see below)
       once drafted)
-- [ ] First SECURITY DEFINER RPC written and tested at SQL level
+- [x] players table created with RLS + check constraints, tested
 - [ ] Phase 1 vertical slice: create club → starter squad → select XI →
       formation/tactics → start match → simulate → result → coins/
       league points → league table update
@@ -62,3 +62,18 @@ Verified directly via SQL against the live Supabase project:
 
 players, squad_selections, fixtures, matches, league_table tables are
 not yet created — next up.
+
+## Tested: players table (2026-09-15)
+Verified directly via SQL against the live Supabase project:
+- RLS enabled, one SELECT policy (own club's players only)
+- Cross-club isolation confirmed: user 1 cannot see user 2's player
+- No insert/update/delete policies for client roles — player creation
+  and attribute changes happen only via service-role RPCs
+- Check constraint rejects invalid position values (e.g. "QUARTERBACK")
+- Check constraint rejects out-of-range attributes (e.g. pace = 150)
+- Test data created and cleaned up afterward
+
+squad_selections, fixtures, matches, league_table tables not yet
+created — next up is either those, or the first SECURITY DEFINER RPC
+(create_club_with_starter_squad) that will use profiles/clubs/players
+together.
