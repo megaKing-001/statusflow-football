@@ -23,7 +23,8 @@ Phase 0 (setup) → Phase 1 (playable foundation) transition.
 - [x] profiles + clubs tables created with RLS, tested (see below)
       once drafted)
 - [x] players table created with RLS + check constraints, tested
-- [ ] Phase 1 vertical slice: create club → starter squad → select XI →
+- [x] create_club_with_starter_squad RPC written, tested, working —
+      Phase 1 vertical slice in progress: create club → starter squad → select XI →
       formation/tactics → start match → simulate → result → coins/
       league points → league table update
 
@@ -77,3 +78,38 @@ squad_selections, fixtures, matches, league_table tables not yet
 created — next up is either those, or the first SECURITY DEFINER RPC
 (create_club_with_starter_squad) that will use profiles/clubs/players
 together.
+
+## Tested: create_club_with_starter_squad RPC (2026-09-15)
+SECURITY DEFINER function, callable only by service_role (verified via
+has_function_privilege AND a direct denied-call test as authenticated).
+
+Bug caught and fixed during testing: initial version had a column name
+collision (`club_id` used as both the RETURNS TABLE output name and a
+column reference inside the function body), causing "ambiguous column"
+errors. Fixed by qualifying table references with an alias. This is
+exactly the kind of bug the "test at SQL level before frontend" rule
+exists to catch.
+
+Verified via direct SQL testing:
+- Happy path: creates 1 club + 19 starter players in the correct
+  position distribution (2 GK, 3 CB, 2 LB, 2 RB, 2 CDM, 2 CM, 2 CAM,
+  1 LW, 1 RW, 2 ST)
+- Idempotent replay: calling again with the SAME idempotency key
+  returns the same club_id and player_count with was_replay=true,
+  confirmed no duplicate club or players were created underneath
+- Second attempt with a DIFFERENT idempotency key for a user who
+  already has a club is correctly rejected, and confirmed to leave
+  zero partial/orphaned rows (transaction rolled back cleanly)
+- Direct call as `authenticated` role is rejected with "permission
+  denied" — confirms the function is truly service_role-only, not
+  just documented as such
+- Test data created and cleaned up afterward
+
+## Known Issue (not yet fixed)
+GK overall rating comes out noticeably lower than outfield players
+(~35 vs ~48-51 average) because the overall formula averages all six
+attributes equally, including shooting/dribbling, which are irrelevant
+to a goalkeeper's actual role. Needs a position-aware overall formula
+(e.g. weight defending/physical/passing higher, shooting/dribbling
+lower, for GK specifically) before this feeds into match simulation.
+Flagging now rather than letting it silently skew squad balance later.
