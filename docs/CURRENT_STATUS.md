@@ -20,7 +20,7 @@ Phase 0 (setup) → Phase 1 (playable foundation) transition.
 - [x] Next.js project scaffolded (next dev --webpack, per environment
       constraints)
 - [x] Git repo initialized, .gitignore confirmed to exclude .env.local
-- [ ] First database schema: clubs, players, squads (see DATABASE.md
+- [x] profiles + clubs tables created with RLS, tested (see below)
       once drafted)
 - [ ] First SECURITY DEFINER RPC written and tested at SQL level
 - [ ] Phase 1 vertical slice: create club → starter squad → select XI →
@@ -48,3 +48,17 @@ deliberate, discussed decision, not a default.
 - Match simulation engine's first-pass algorithm (see brief section 13)
 - Whether league table MVP uses 8 fictional clubs as suggested in brief
   section 20, or fewer for the very first playable slice
+
+## Tested: profiles + clubs RLS (2026-09-15)
+Verified directly via SQL against the live Supabase project:
+- RLS enabled on both tables
+- A user can SELECT only their own club (rival club invisible)
+- Direct INSERT into clubs from an authenticated role is blocked
+- Direct UPDATE of a user's own club (e.g. coins) is silently blocked —
+  zero rows affected, confirming the anti-pay-to-win / server-authority
+  rule holds even for a legitimately authenticated attacker
+- Test data created and cleaned up afterward; clubs table confirmed
+  empty again post-test
+
+players, squad_selections, fixtures, matches, league_table tables are
+not yet created — next up.
