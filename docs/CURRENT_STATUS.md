@@ -119,3 +119,31 @@ Retested: GK overall now averages ~44, in line with outfield range of
 function was recreated. Full happy-path + position-distribution test
 rerun successfully, test data cleaned up afterward.
 Flagging now rather than letting it silently skew squad balance later.
+
+## Tested: squad_selections table (2026-09-15)
+Design choice: unlike clubs/players, this table allows direct client
+writes (not RPC-only) since it's a management decision, not a
+currency/progression change. Integrity is enforced by RLS (ownership)
+plus a BEFORE INSERT/UPDATE trigger (validate_squad_selection) that
+checks real football rules at the database level.
+
+Verified via direct SQL testing:
+- Happy path: user creates own squad selection (11 starters, 8 bench,
+  valid formation/mentality) successfully
+- Wrong starter count (10 instead of 11) rejected by the trigger
+- Invalid formation (not in the allowed list) rejected by check
+  constraint
+- Cross-club player theft blocked on TWO independent layers:
+  1. RLS on players table means a user cannot even read another
+     user's player IDs to begin with
+  2. Even with a hardcoded/leaked foreign player ID (fetched via
+     elevated access to simulate this), the validation trigger
+     independently rejects it — genuine defense in depth, not reliant
+     on a single layer
+- Cross-user read isolation confirmed: user 2 cannot see user 1's
+  squad selection
+- Test data created and cleaned up afterward
+
+squad_selections is the last table needed before fixtures/matches.
+Next: fixtures + matches tables, then the match simulation engine
+itself (brief sections 13-14) — the biggest remaining piece of Phase 1.
