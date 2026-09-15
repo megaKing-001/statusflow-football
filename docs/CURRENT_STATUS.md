@@ -147,3 +147,48 @@ Verified via direct SQL testing:
 squad_selections is the last table needed before fixtures/matches.
 Next: fixtures + matches tables, then the match simulation engine
 itself (brief sections 13-14) — the biggest remaining piece of Phase 1.
+
+## Session Update — Fixtures, Matches, League Foundation
+
+### Schema decisions made
+- NPC clubs: `clubs.owner_id` is now nullable, added `is_npc` boolean.
+  A check constraint enforces: NPC clubs always have owner_id=null,
+  human clubs always have an owner. Partial unique index keeps "one
+  club per real owner" without blocking multiple NPC clubs.
+- Leagues are personal-per-player, not shared/global. Each player's
+  league = their club + all current NPC clubs, generated once at
+  onboarding. `leagues.owner_profile_id` enforces one league per
+  player via a partial unique index.
+
+### New tables (all RLS-enabled, public read-only)
+leagues, league_members, fixtures, matches, league_standings,
+league_creation_log (service_role-only, no public read — internal
+idempotency ledger).
+
+fixtures/matches/league_standings added to supabase_realtime
+publication with REPLICA IDENTITY FULL.
+
+### New RPCs (all service_role-only, SECURITY DEFINER)
+- generate_starter_squad_for_club(club_id) — extracted helper, used
+  by both human and NPC club creation
+- create_npc_club(name, abbreviation, stadium_name)
+- create_league_with_fixtures(owner_profile_id, name, club_ids[],
+  idempotency_key) — round-robin fixture generator
+- onboard_new_manager(owner_id, club_name, abbreviation,
+  stadium_name, idempotency_key) — the one the frontend calls:
+  creates club + squad + personal league + fixtures atomically
+
+### Seeded data
+7 NPC clubs, 19 players each: Riverside Athletic, Ironbridge FC,
+Harbour City, Vale Rangers, Northgate United, Castlefield Town,
+Summit Rovers.
+
+### Bugs caught during testing (fixed same session)
+1. Column ambiguity: RPC output column `league_id` collided with a
+   table column reference inside the function body.
+2. matches.fixture_id was missing ON DELETE CASCADE to fixtures.
+
+### Next up
+Design match simulation engine (Master Brief section 13-14):
+player/team/tactical/match factors, controlled randomness, weaker
+team can occasionally win but not too often.

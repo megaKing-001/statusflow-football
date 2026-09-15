@@ -106,3 +106,29 @@ goals_against, goal_difference, points.
 - club_finances detail (brief section 26)
 These will get their own DATABASE.md additions when their phase starts,
 not built speculatively now.
+
+## leagues
+id, name, season_number (default 1), status (active/completed),
+owner_profile_id (nullable FK -> profiles, unique when not null —
+one personal league per player), created_at.
+
+## league_members
+league_id, club_id (composite PK). Which clubs belong to a league.
+
+## fixtures
+id, league_id, matchday, home_club_id, away_club_id,
+status (scheduled/completed), created_at.
+Check constraint: home_club_id <> away_club_id.
+
+## matches
+id, fixture_id (unique FK -> fixtures, ON DELETE CASCADE),
+home_score, away_score, status, events (jsonb array),
+home_stats/away_stats (jsonb), idempotency_key (unique), played_at.
+
+## league_standings
+league_id, club_id (composite PK), played, won, drawn, lost,
+goals_for, goals_against, points, updated_at.
+
+## league_creation_log
+idempotency_key (PK), league_id, created_at.
+Internal only — no public RLS read policy.
