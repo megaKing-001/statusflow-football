@@ -16,10 +16,10 @@ Phase 0 (setup) → Phase 1 (playable foundation) transition.
       ~/statusflow-gaming and ~/statusflow-gaming-old — those are NOT
       touched or reused)
 - [x] docs/ folder created, documentation in progress
-- [ ] .env.local created with Supabase URL + keys
-- [ ] Next.js project scaffolded (next dev --webpack, per environment
+- [x] .env.local created with Supabase URL + keys
+- [x] Next.js project scaffolded (next dev --webpack, per environment
       constraints)
-- [ ] Git repo initialized, .gitignore confirmed to exclude .env.local
+- [x] Git repo initialized, .gitignore confirmed to exclude .env.local
 - [ ] First database schema: clubs, players, squads (see DATABASE.md
       once drafted)
 - [ ] First SECURITY DEFINER RPC written and tested at SQL level
