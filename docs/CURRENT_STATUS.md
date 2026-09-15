@@ -105,11 +105,17 @@ Verified via direct SQL testing:
   just documented as such
 - Test data created and cleaned up afterward
 
-## Known Issue (not yet fixed)
-GK overall rating comes out noticeably lower than outfield players
-(~35 vs ~48-51 average) because the overall formula averages all six
-attributes equally, including shooting/dribbling, which are irrelevant
-to a goalkeeper's actual role. Needs a position-aware overall formula
-(e.g. weight defending/physical/passing higher, shooting/dribbling
-lower, for GK specifically) before this feeds into match simulation.
+## Fixed: GK Overall Rating (2026-09-15)
+Replaced the flat 6-attribute average with a position-weighted formula.
+GK now weights defending (30%), physical (25%), passing (20%), pace
+(10%), dribbling (10%), shooting (5%) — de-emphasizing attributes
+irrelevant to a keeper's role. Outfield positions similarly weighted
+toward their relevant attributes (e.g. attackers weight shooting/pace/
+dribbling highest, defenders weight defending highest).
+
+Retested: GK overall now averages ~44, in line with outfield range of
+~48-54 (was ~35 before the fix, a clear outlier). Privilege lockdown
+(anon/authenticated denied, service_role only) reverified after the
+function was recreated. Full happy-path + position-distribution test
+rerun successfully, test data cleaned up afterward.
 Flagging now rather than letting it silently skew squad balance later.
