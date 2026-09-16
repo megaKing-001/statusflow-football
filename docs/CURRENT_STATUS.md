@@ -237,3 +237,142 @@ simulation yet — intentional, per "balance the core loop first."
 ### Next up
 Next.js server actions to call onboard_new_manager and
 simulate_match. Frontend not started yet.
+
+## Session: Frontend Build (Auth → Onboarding → Core Screens)
+
+Built and verified end-to-end in the browser (Termux/Android, Next.js
+App Router):
+
+- Design system: dark green-tinted theme (`night`/`surface`/`pitch`/
+  `gold`/`chalk`/`mist`/`alert` tokens in `app/globals.css`), Bebas Neue
+  (display) + Inter (body) via `next/font/google`, shared primitives in
+  `components/ui/` (Button, Badge, StatRow, SectionLabel).
+- App shell: `app/(app)/` route group with a single `layout.tsx` doing
+  the auth guard (redirect to /login) + Header + BottomNav (Home/Squad/
+  Fixtures/Club/More), replacing the per-page auth checks.
+- Onboarding: `components/OnboardingForm.tsx` calls the existing
+  `onboardManager()` action → `onboard_new_manager` RPC. Idempotency key
+  generated once via `useState(() => crypto.randomUUID())`, not
+  regenerated per submit.
+- Dashboard (`app/(app)/dashboard/page.tsx`): branches on whether the
+  user owns a club (shows OnboardingForm if not). Shows club header,
+  next-fixture hero card, league position/record/points, squad summary,
+  last 3 results — all live Supabase reads, nothing fabricated.
+- Fixtures (`app/(app)/fixtures/page.tsx`): upcoming/completed lists for
+  the player's own 7 fixtures. Next scheduled fixture gets a real
+  "Simulate Match" button wired to `components/PlayMatchButton.tsx` →
+  `playMatch()` action.
+- Club/League Table (`app/(app)/club/page.tsx`): full 8-club standings,
+  sorted points → GD → goals for, own row highlighted.
+- Squad (`app/(app)/squad/page.tsx`): Starting XI + Bench, grouped by
+  position order (GK→CB/LB/RB→CDM/CM/CAM→LW/RW/ST), sorted by overall
+  within group. No formation editor yet (Tactics screen, still to build).
+
+### Bugs Found & Fixed This Session
+
+1. **Supabase API key migration.** This project's `.env.local` had a
+   `service_role` legacy JWT that no longer worked ("Invalid API key")
+   because the Supabase project had migrated to the new key system
+   (`sb_publishable_...` / `sb_secret_...`). Fix: replaced
+   `SUPABASE_SERVICE_ROLE_KEY` in `.env.local` with the `sb_secret_...`
+   key from Dashboard → Project Settings → API Keys → Secret keys.
+   LESSON: if "Invalid API key" recurs, check whether `.env.local`'s
+   anon key matches the dashboard's current publishable key first —
+   mismatch there means the whole file is stale from before a rotation.
+
+2. **`clubs` table had no public-read RLS policy.** Only had
+   `clubs_select_own` (`auth.uid() = owner_id`), meaning a player could
+   read their own club but not opponents' names — silently broke
+   fixture/dashboard opponent display (showed "TBD"). Fixed by dropping
+   that policy and adding `clubs_public_read` (`using (true)`),
+   consistent with the public-read pattern already used on fixtures/
+   matches/league_standings/leagues. No sensitive data in this table;
+   write access unaffected (still RPC-only).
+
+3. **Onboarding form didn't trim whitespace.** Club name/abbreviation/
+   stadium name saved with trailing spaces from the input fields. Fixed
+   in `OnboardingForm.tsx` by calling `.trim()` on all three values at
+   the `onboardManager()` call site. One already-created production club
+   row was cleaned up directly via SQL `trim()` update.
+
+### Bugs Found & Fixed This Session
+
+1. **Supabase API key migration.** This project's `.env.local` had a
+   `service_role` legacy JWT that no longer worked ("Invalid API key")
+   because the Supabase project had migrated to the new key system
+   (`sb_publishable_...` / `sb_secret_...`). Fix: replaced
+   `SUPABASE_SERVICE_ROLE_KEY` in `.env.local` with the `sb_secret_...`
+   key from Dashboard → Project Settings → API Keys → Secret keys.
+   LESSON: if "Invalid API key" recurs, check whether `.env.local`'s
+   anon key matches the dashboard's current publishable key first —
+   mismatch there means the whole file is stale from before a rotation.
+
+2. **`clubs` table had no public-read RLS policy.** Only had
+   `clubs_select_own` (`auth.uid() = owner_id`), meaning a player could
+   read their own club but not opponents' names — silently broke
+   fixture/dashboard opponent display (showed "TBD"). Fixed by dropping
+   that policy and adding `clubs_public_read` (`using (true)`),
+   consistent with the public-read pattern already used on fixtures/
+   matches/league_standings/leagues. No sensitive data in this table;
+   write access unaffected (still RPC-only).
+
+3. **Onboarding form didn't trim whitespace.** Club name/abbreviation/
+   stadium name saved with trailing spaces from the input fields. Fixed
+   in `OnboardingForm.tsx` by calling `.trim()` on all three values at
+   the `onboardManager()` call site. One already-created production club
+   row was cleaned up directly via SQL `trim()` update.
+
+### New RPC: simulate_matchday
+
+Problem: personal leagues have exactly 1 human club + 7 NPCs, but only
+the human's own fixtures ever got simulated (via button clicks) — the
+21 NPC-vs-NPC fixtures per season never ran on their own, so the league
+table looked frozen/lopsided for every club except the player's.
+
+`simulate_matchday(p_fixture_id uuid, p_idempotency_key text)` —
+SECURITY DEFINER, service_role-only, wraps the existing tested
+`simulate_match()` without modifying it:
+1. Simulates the given fixture using the passed idempotency key
+   (unchanged behavior/replay-safety from `simulate_match`).
+2. Loops over other `scheduled` fixtures in the same league+matchday
+   where both clubs have `is_npc = true`, simulating each with a
+   deterministic key (`'npc-auto-' || fixture_id`) — naturally
+   replay-safe since already-completed siblings are excluded by the
+   `status = 'scheduled'` filter before the key is ever checked again.
+Returns the primary result plus `npc_fixtures_simulated` count.
+
+Tested on isolated throwaway data (2 temp NPC clubs + 2 real NPCs, 4-club
+league): happy path (sibling correctly simulated, count=1), matchday
+isolation (other matchdays untouched), replay safety (was_replay=true,
+count=0, no double-counted standings). All temp data cleaned up after
+— confirmed back to 7 NPC clubs, 0 leftover test leagues.
+
+`lib/actions/match.ts`'s `playMatch()` now calls `simulate_matchday`
+instead of `simulate_match` directly — same return shape, so no other
+frontend changes needed.
+
+**Production backfill:** the real player's (Megamind FC) league had 21
+already-scheduled NPC-vs-NPC fixtures left over from before this RPC
+existed (matchdays 1-7 where only Megamind's own game had been played).
+Ran a one-off `DO` block calling `simulate_match()` directly on all of
+them with the same deterministic key scheme. Confirmed after: all 8
+clubs at played=7, realistic varied standings, no impact on Megamind's
+already-completed results.
+
+### Backfilled Note: Earlier Simulation Validation (undocumented until now)
+
+From the session that built the match engine, two validation results
+were run but never written down:
+- Mentality modifiers confirmed mathematically consistent: attacking/
+  defensive/balanced attack-defense values all derive correctly from
+  the same balanced base rating for a given club.
+- 7-club/21-fixture mini-season simulated end-to-end via direct RPC
+  calls: all standings reconciled exactly (wins+draws=total matches,
+  each club's W/D/L/points arithmetic verified correct).
+
+### Next Up
+- Tactics/Formation editor (change starting XI, formation, mentality —
+  currently only the auto-generated default from onboarding exists).
+- Animated 2D match viewer (Simulate Match currently gives an instant
+  result with no visual playback).
+- Training/Facilities/Transfers placeholders (Phase 2, no backend yet).
