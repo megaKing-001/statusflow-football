@@ -349,3 +349,40 @@ were run but never written down:
 - Animated 2D match viewer (Simulate Match currently gives an instant
   result with no visual playback).
 - Training/Facilities/Transfers placeholders (Phase 2, no backend yet).
+
+## Session Update — Tactics Editor & Player Renaming
+
+### New components
+- `components/TacticsEditor.tsx` (154 lines) — formation/mentality editor
+  and starting XI/bench toggle, writing directly to `squad_selections`
+  (client-side write, permitted per the existing design: management
+  decisions use RLS + trigger validation, not RPC-only).
+- `components/PlayerNameEditor.tsx` — client component, inline rename
+  UI (click name → input + Save/Cancel). Calls `renamePlayer()` from
+  `lib/actions/player.ts`, which verifies the session via
+  `auth.getUser()` first, then calls the `rename_player` RPC through
+  `createServiceClient()`.
+
+### New RPC
+- `rename_player` (SECURITY DEFINER, service_role-only) — verifies
+  club ownership server-side before renaming. Tested directly via SQL:
+  happy path, wrong-owner rejection, empty-name rejection all passed.
+
+### Integration
+- `app/(app)/squad/page.tsx` patched: removed the local `PlayerRow`
+  function, both Starting XI and Bench lists now render
+  `PlayerNameEditor` per player instead.
+
+### Live browser testing (first live test of squad_selections RLS write)
+- `/squad`: rename flow tested — save persists after refresh, empty
+  name correctly blocked with inline error.
+- `/squad/edit` (Tactics editor): toggled starters/bench, changed
+  formation and mentality, saved. Confirmed round-trip by navigating
+  back to `/squad` and verifying the updated formation/mentality label
+  and starting XI/bench lists reflected the change — this was the
+  first live exercise of a direct client write to `squad_selections`
+  and it worked as designed.
+
+### Next up
+Continue Phase 2 planning items (training, transfers, facilities) or
+further Phase 1 polish — not yet decided.
