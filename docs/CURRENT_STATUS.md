@@ -295,33 +295,6 @@ App Router):
    the `onboardManager()` call site. One already-created production club
    row was cleaned up directly via SQL `trim()` update.
 
-### Bugs Found & Fixed This Session
-
-1. **Supabase API key migration.** This project's `.env.local` had a
-   `service_role` legacy JWT that no longer worked ("Invalid API key")
-   because the Supabase project had migrated to the new key system
-   (`sb_publishable_...` / `sb_secret_...`). Fix: replaced
-   `SUPABASE_SERVICE_ROLE_KEY` in `.env.local` with the `sb_secret_...`
-   key from Dashboard → Project Settings → API Keys → Secret keys.
-   LESSON: if "Invalid API key" recurs, check whether `.env.local`'s
-   anon key matches the dashboard's current publishable key first —
-   mismatch there means the whole file is stale from before a rotation.
-
-2. **`clubs` table had no public-read RLS policy.** Only had
-   `clubs_select_own` (`auth.uid() = owner_id`), meaning a player could
-   read their own club but not opponents' names — silently broke
-   fixture/dashboard opponent display (showed "TBD"). Fixed by dropping
-   that policy and adding `clubs_public_read` (`using (true)`),
-   consistent with the public-read pattern already used on fixtures/
-   matches/league_standings/leagues. No sensitive data in this table;
-   write access unaffected (still RPC-only).
-
-3. **Onboarding form didn't trim whitespace.** Club name/abbreviation/
-   stadium name saved with trailing spaces from the input fields. Fixed
-   in `OnboardingForm.tsx` by calling `.trim()` on all three values at
-   the `onboardManager()` call site. One already-created production club
-   row was cleaned up directly via SQL `trim()` update.
-
 ### New RPC: simulate_matchday
 
 Problem: personal leagues have exactly 1 human club + 7 NPCs, but only
