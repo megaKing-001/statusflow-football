@@ -192,3 +192,48 @@ Summit Rovers.
 Design match simulation engine (Master Brief section 13-14):
 player/team/tactical/match factors, controlled randomness, weaker
 team can occasionally win but not too often.
+
+## Session Update — Match Simulation Engine
+
+### New functions (all service_role-only, SECURITY DEFINER)
+- generate_default_squad_selection_for_club(club_id, formation,
+  mentality) — auto-picks best 11 by overall (always includes exactly
+  1 GK). Wired into create_npc_club and onboard_new_manager so every
+  club always has a valid squad_selections row from creation.
+- get_club_match_ratings(club_id) — reads starting XI + mentality,
+  returns attack/defense/midfield numbers. Mentality modifiers baked
+  in here (attacking: +8% attack/-6% defense, defensive: reverse,
+  balanced: no change).
+- simulate_match(fixture_id, idempotency_key) — the engine. 18 x
+  5-minute segments, weighted chance-of-chance per segment based on
+  relative attack+midfield strength with per-segment random noise
+  (0.75-1.25x) for controlled variance. Home advantage: +4% to home
+  attack/midfield only. Goal conversion probability =
+  0.15 + 0.35 * (attacker_strength / (attacker+defender_strength)).
+  Also generates yellow cards (flavor, ~4%/segment), half-time/
+  full-time markers. Updates matches, fixtures.status, and both
+  clubs' league_standings atomically in one transaction.
+
+### Statistical validation (900 trials via a temporary test function)
+- Big favorite (88 vs 42 overall) at home: 69% win / 21% draw / 10%
+  upset for the underdog.
+- Same favorite away from home: still ~68% win — confirms home
+  advantage is a nudge, not a game-changer.
+- Evenly matched clubs: 42% home win / 24% draw / 34% away win,
+  ~3.3 total goals/match — realistic spread for "medium variance."
+
+### End-to-end test (real fixture through the real RPC)
+Happy path, replay safety (same idempotency key = same result, no
+double-counted standings), duplicate-completion rejection (different
+key on an already-completed fixture correctly errors), unauthorized
+caller rejection all confirmed. Test league/fixtures/matches cleaned
+up afterward — no test data left in the database.
+
+### Known gap (not blocking, flagged for Phase 2)
+Only "mentality" is wired into the match maths right now. Pressing,
+tempo, and defensive line exist as brief concepts but aren't in the
+simulation yet — intentional, per "balance the core loop first."
+
+### Next up
+Next.js server actions to call onboard_new_manager and
+simulate_match. Frontend not started yet.
