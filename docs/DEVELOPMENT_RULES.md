@@ -65,3 +65,19 @@ silently resolve it by rewriting either one.
 Keep these five docs updated as architecture decisions are made:
 PROJECT_CONTEXT.md, CURRENT_STATUS.md, ARCHITECTURE.md, DATABASE.md,
 DEVELOPMENT_RULES.md (this file).
+
+## Rule: Always Check Full git status Before Committing
+On 2026-09-17 we discovered that ~20 files (the entire dashboard, squad,
+auth, tactics editor, and all of lib/actions + lib/supabase) had been
+built and used in the live app across multiple past sessions but were
+NEVER committed to git — only docs about them had been committed,
+because commits had been staging specific files (e.g. `git add
+docs/CURRENT_STATUS.md`) instead of checking `git status` for the
+complete picture. This meant real, working, tested code existed only
+on the phone with zero backup for an unknown number of sessions.
+
+Going forward: before every commit, run `git status` (not just `git
+add <the files I think changed>`) and actually read the full untracked/
+modified list. If anything unexpected is untracked, stop and ask why
+before committing past it. A doc update describing code changes is not
+a substitute for the code itself being in git.
