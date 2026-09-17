@@ -386,3 +386,51 @@ were run but never written down:
 ### Next up
 Continue Phase 2 planning items (training, transfers, facilities) or
 further Phase 1 polish — not yet decided.
+
+## Session Update — Static Match Results Page
+
+### New page
+- `app/(app)/match/[fixtureId]/page.tsx` — fetches the fixture (with
+  ownership check via `leagues!inner(owner_profile_id)`, same pattern
+  as `playMatch()`), both club names, and the `matches` row (score,
+  `events` jsonb, `home_stats`/`away_stats` jsonb). Renders scoreline
+  header, chronological event timeline (goal/chance/yellow_card/
+  half_time/full_time), and a side-by-side stats comparison
+  (possession, shots, shots on target, corners, yellow cards).
+- Handles three states: match not found / not owned by caller, fixture
+  not yet completed, and the normal completed-match view.
+
+### Integration
+- `components/PlayMatchButton.tsx`: after a successful simulate, now
+  navigates to `/match/[fixtureId]` instead of just `router.refresh()`
+  — this is the first time simulating a match actually shows anything
+  beyond an updated list row.
+- `app/(app)/fixtures/page.tsx`: completed fixture rows are now
+  `Link`s to `/match/[fixtureId]`, so past results are viewable too,
+  not just the one just played.
+
+### Verified before writing any code
+Queried `simulate_match`/`simulate_matchday`'s actual `pg_get_functiondef`
+directly via Supabase MCP rather than relying on doc summaries — confirmed
+`simulate_matchday` returns only `(fixture_id, home_score, away_score,
+was_replay, npc_fixtures_simulated)`; `events`/`home_stats`/`away_stats`
+live only on the `matches` row and needed a dedicated select, which the
+new page now does.
+
+### Live browser testing
+Tested against a real completed fixture (Harbour City 1–1 Megamind
+Football Club, Matchday 7). Cross-checked the rendered stats against the
+underlying event timeline manually: shot counts (9 vs 1) matched the
+number of chance/goal events per team, shots-on-target matched the
+`round(shots * 0.6)` formula, scoreline matched the two goal events.
+No layout issues on mobile (bottom-nav overlap concern from a screenshot
+was confirmed to be a scroll-position artifact, not a real bug).
+
+### Deferred (per explicit decision)
+The animated top-down pitch viewer (Master Brief Part 9/16) is intentionally
+NOT built yet — this static results page was chosen as the smaller, immediate
+step; the animated viewer remains a larger future piece.
+
+### Next up
+Not yet decided — options include the animated pitch viewer, Club
+Facilities (needs new coin-economy backend work first), or Training.
