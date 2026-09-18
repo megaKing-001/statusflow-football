@@ -434,3 +434,47 @@ step; the animated viewer remains a larger future piece.
 ### Next up
 Not yet decided — options include the animated pitch viewer, Club
 Facilities (needs new coin-economy backend work first), or Training.
+
+## Attempted & Reverted — Top-Down Abstract Pitch Viewer (2026-09-18)
+
+Built and live-tested a canvas-based, event-driven top-down pitch
+animation (numbered jersey-circle markers, ball driving toward goals
+on real goal/chance events, half-time auto-pause, working scrubber/
+speed controls) as a first attempt at the Match Viewer.
+
+**Reverted before committing** after re-reading
+`IMPORTANT_MATCH_VIEWER_DIRECTION.md`, which explicitly rules out this
+exact approach: "Do not use a top-down tactical-board view as the
+primary match experience. Do not use dots, circles, arrows, abstract
+player markers, or moving icons as the main representation of
+players." The doc requires actual footballer-like figures with a
+broadcast/sideline camera, even at Stage 1 — abstract markers are
+named as the specific thing to avoid, not an acceptable interim step.
+
+Root cause of the miss: "Dream League Soccer" was used as the style
+reference mid-session, and was correctly interpreted as "auto-play,
+no manual control" but the equally important other half of that
+reference — actual footballer figures, not abstract markers — wasn't
+cross-checked against this doc before building.
+
+The event-driven logic itself (ball timing relative to real events,
+progressive score reveal, half-time handling) worked correctly and
+could likely be reused as the animation engine underneath a proper
+footballer-sprite or lightweight-3D renderer later — the problem was
+the visual representation layer, not the underlying timing logic.
+
+**Lesson:** before starting any Match Viewer visual work, re-read
+`IMPORTANT_MATCH_VIEWER_DIRECTION.md` in full and confirm the specific
+rendering approach against it before writing code, not just the
+general concept.
+
+Files touched (`components/MatchAnimation.tsx`, the match page edit)
+were removed/reverted; nothing from this attempt was committed to git.
+
+### Next up
+Real next step for the Match Viewer: scope a footballer-sprite-based
+or lightweight-3D 2D approach per the staged plan in
+`IMPORTANT_MATCH_VIEWER_DIRECTION.md` (Stage 1: footballer-like models,
+kits, ball, pitch, football-game camera — no abstract markers).
+Alternative priorities remain Club Facilities (needs coin-economy
+backend first) or Training.
