@@ -47,17 +47,15 @@ function stripRootMotion(clip: THREE.AnimationClip): THREE.AnimationClip {
       const firstX = values[0]
       const firstZ = values[2]
       for (let i = 0; i < values.length; i += 3) {
-        values[i] = firstX // x
-        values[i + 2] = firstZ // z
-        // leave values[i+1] (y) untouched so vertical motion still plays
+        values[i] = firstX
+        values[i + 2] = firstZ
       }
     }
   }
   return cloned
 }
 
-// Gives a cloned character its own material instances (so recoloring one
-// character doesn'''t affect the other, since SkeletonUtils.clone shares
+// Gives a model its own material instances (SkeletonUtils.clone shares
 // materials by reference) and applies a simple two-tone team color.
 function tintCharacter(model: THREE.Object3D, mainColor: number, accentColor: number) {
   model.traverse((child) => {
@@ -67,13 +65,9 @@ function tintCharacter(model: THREE.Object3D, mainColor: number, accentColor: nu
     const cloned = mats.map((m) => (m as THREE.Material).clone())
     mesh.material = Array.isArray(mesh.material) ? cloned : cloned[0]
     for (const m of cloned) {
-      const std = m as THREE.MeshStandardMaterial | THREE.MeshPhongMaterial
+      const std = m as THREE.MeshStandardMaterial
       if (!('color' in std)) continue
-      if (m.name.includes('Joints')) {
-        std.color.setHex(accentColor)
-      } else {
-        std.color.setHex(mainColor)
-      }
+      std.color.setHex(m.name.includes('Joints') ? accentColor : mainColor)
     }
   })
 }
@@ -143,11 +137,38 @@ class Character {
   }
 }
 
+// Spawns a simple ambient teammate/opponent: reuses already-loaded clips
+// (no new FBX loads needed), tinted, positioned, gently idling. These
+// aren't individually driven by match events - we only know which TEAM
+// an event belongs to, not which specific player - so they exist to
+// populate the pitch honestly rather than fake per-player specificity.
+function spawnBackgroundPlayer(
+  scene: THREE.Scene,
+  baseModel: THREE.Object3D,
+  clips: Record<string, THREE.AnimationClip>,
+  position: THREE.Vector3,
+  rotationY: number,
+  mainColor: number,
+  accentColor: number
+): Character {
+  const model = cloneSkeleton(baseModel)
+  model.position.copy(position)
+  model.rotation.y = rotationY
+  scene.add(model)
+  tintCharacter(model, mainColor, accentColor)
+
+  const character = new Character()
+  character.mixer = new THREE.AnimationMixer(model)
+  character.clips = clips
+  character.play('idle')
+  return character
+}
+
 export function MatchViewer3D({ homeName, awayName, homeScore, awayScore, events }: Props) {
   const mountRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const [status, setStatus] = useState('Initializing...')
   const [eventText, setEventText] = useState('')
-  const containerRef = useRef<HTMLDivElement>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
 
   async function goFullscreenLandscape() {
@@ -164,7 +185,6 @@ export function MatchViewer3D({ homeName, awayName, homeScore, awayScore, events
       setIsFullscreen(true)
     } catch (err) {
       console.error('Fullscreen/landscape request failed:', err)
-      // Not fatal - viewer still works in portrait, just not locked
     }
   }
 
@@ -203,9 +223,6 @@ export function MatchViewer3D({ homeName, awayName, homeScore, awayScore, events
     }
     window.addEventListener('resize', handleResize)
     window.addEventListener('orientationchange', handleResize)
-    // Fullscreen/orientation-lock transitions don't always fire a resize
-    // event immediately - check again shortly after in case dimensions
-    // settle a moment later
     const resizeSettleTimeout = setTimeout(handleResize, 300)
 
     scene.add(new THREE.HemisphereLight(0xffffff, 0x223322, 1.2))
@@ -221,9 +238,8 @@ export function MatchViewer3D({ homeName, awayName, homeScore, awayScore, events
     pitch.position.z = -4
     scene.add(pitch)
 
-    // --- Pitch markings: thin white lines laid flat on the grass ---
     const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff })
-    const LINE_Y = 0.01 // just above the grass, avoids z-fighting flicker
+    const LINE_Y = 0.01
 
     function addLine(width: number, depth: number, x: number, z: number) {
       const line = new THREE.Mesh(new THREE.PlaneGeometry(width, depth), lineMat)
@@ -232,27 +248,17 @@ export function MatchViewer3D({ homeName, awayName, homeScore, awayScore, events
       scene.add(line)
     }
 
-    // Halfway line (running across the pitch width, near our outfielder's row)
     addLine(30, 0.1, 0, 0)
-
-    // Center circle (approximated as a thin ring)
-    const centerCircle = new THREE.Mesh(
-      new THREE.RingGeometry(2.9, 3.0, 48),
-      lineMat
-    )
+    const centerCircle = new THREE.Mesh(new THREE.RingGeometry(2.9, 3.0, 48), lineMat)
     centerCircle.rotation.x = -Math.PI / 2
     centerCircle.position.set(0, LINE_Y, 0)
     scene.add(centerCircle)
 
-    // Goal line (at the back, where the goalkeeper stands)
     addLine(14, 0.1, 0, -9.5)
+    addLine(10, 0.1, 0, -5.5)
+    addLine(0.1, 4, -5, -7.5)
+    addLine(0.1, 4, 5, -7.5)
 
-    // Penalty box (in front of the goal line)
-    addLine(10, 0.1, 0, -5.5) // box's near edge
-    addLine(0.1, 4, -5, -7.5) // left side
-    addLine(0.1, 4, 5, -7.5) // right side
-
-    // Simple goal frame (posts + crossbar, as thin white boxes)
     const postMat = new THREE.MeshStandardMaterial({ color: 0xffffff })
     const postGeo = new THREE.BoxGeometry(0.12, 1.2, 0.12)
     const leftPost = new THREE.Mesh(postGeo, postMat)
@@ -261,10 +267,7 @@ export function MatchViewer3D({ homeName, awayName, homeScore, awayScore, events
     const rightPost = new THREE.Mesh(postGeo, postMat)
     rightPost.position.set(1.8, 0.6, -9.5)
     scene.add(rightPost)
-    const crossbar = new THREE.Mesh(
-      new THREE.BoxGeometry(3.72, 0.12, 0.12),
-      postMat
-    )
+    const crossbar = new THREE.Mesh(new THREE.BoxGeometry(3.72, 0.12, 0.12), postMat)
     crossbar.position.set(0, 1.2, -9.5)
     scene.add(crossbar)
 
@@ -284,12 +287,14 @@ export function MatchViewer3D({ homeName, awayName, homeScore, awayScore, events
 
     const outfielder = new Character()
     const keeper = new Character()
+    const backgroundPlayersRef: { current: Character[] } = { current: [] }
 
     function animate() {
       frameId = requestAnimationFrame(animate)
       const delta = clock.getDelta()
       outfielder.update(delta)
       keeper.update(delta)
+      for (const bp of backgroundPlayersRef.current) bp.update(delta)
 
       if (ballAnim) {
         const t = Math.min((clock.getElapsedTime() - ballAnim.startTime) / ballAnim.duration, 1)
@@ -317,28 +322,17 @@ export function MatchViewer3D({ homeName, awayName, homeScore, awayScore, events
       const outfieldModel = cloneSkeleton(baseModel)
       outfieldModel.position.set(0, 0, 0)
       outfieldModel.rotation.y = Math.PI
-      tintCharacter(outfieldModel, 0x1e3a8a, 0xffffff) // navy shirt, white shorts/trim
+      tintCharacter(outfieldModel, 0x1e3a8a, 0xffffff)
       scene.add(outfieldModel)
       outfielder.mixer = new THREE.AnimationMixer(outfieldModel)
 
       const keeperModel = cloneSkeleton(baseModel)
       keeperModel.position.set(0, 0, -7)
-      tintCharacter(keeperModel, 0xeab308, 0x1a1a1a) // goalkeeper yellow, dark trim
+      tintCharacter(keeperModel, 0xeab308, 0x1a1a1a)
       scene.add(keeperModel)
       keeper.mixer = new THREE.AnimationMixer(keeperModel)
 
-      const materialNames: string[] = []
-      outfieldModel.traverse((child) => {
-        const mesh = child as THREE.Mesh
-        if (mesh.isMesh) {
-          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
-          for (const m of mats) {
-            materialNames.push((m as THREE.Material).name || '(unnamed)')
-          }
-        }
-      })
-      console.log('MATERIALS FOUND:', materialNames)
-      setStatus('Materials: ' + materialNames.join(', ') + ' | Loading animation clips...')
+      setStatus('Loading animation clips...')
       for (const [key, url] of Object.entries(OUTFIELD_CLIPS)) {
         const result = await loader.loadAsync(encodeURI(url))
         if (result.animations.length > 0) {
@@ -352,6 +346,13 @@ export function MatchViewer3D({ homeName, awayName, homeScore, awayScore, events
         }
       }
       if (cancelled) return
+
+      backgroundPlayersRef.current = [
+        spawnBackgroundPlayer(scene, baseModel, outfielder.clips, new THREE.Vector3(-2.5, 0, 1.5), Math.PI, 0x1e3a8a, 0xffffff),
+        spawnBackgroundPlayer(scene, baseModel, outfielder.clips, new THREE.Vector3(2.2, 0, -1), Math.PI, 0x1e3a8a, 0xffffff),
+        spawnBackgroundPlayer(scene, baseModel, outfielder.clips, new THREE.Vector3(-3, 0, -5), 0, 0xb91c1c, 0xffffff),
+        spawnBackgroundPlayer(scene, baseModel, outfielder.clips, new THREE.Vector3(3.2, 0, -4.2), 0, 0xb91c1c, 0xffffff),
+      ]
 
       setStatus('Ready.')
       outfielder.play('idle')
