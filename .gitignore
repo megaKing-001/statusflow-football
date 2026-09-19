@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# raw Mixamo downloads (58 files, ~31MB) - only the ~9MB actually used
+# gets copied into public/models/ and committed; this folder is a local
+# scratch space for grabbing more animations later, not app code
+assets/mixamo-raw/

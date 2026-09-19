@@ -157,6 +157,13 @@ export default async function MatchPage({ params }: { params: Promise<{ fixtureI
       )}
 
       <Link
+        href={`/match/${fixtureId}/watch`}
+        className="mb-3 block rounded-lg border border-pitch px-4 py-2.5 text-center text-sm font-medium text-pitch"
+      >
+        Watch (test)
+      </Link>
+
+      <Link
         href="/fixtures"
         className="block rounded-lg bg-pitch px-4 py-2.5 text-center text-sm font-medium text-night"
       >
