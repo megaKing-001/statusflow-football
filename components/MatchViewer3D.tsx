@@ -221,6 +221,53 @@ export function MatchViewer3D({ homeName, awayName, homeScore, awayScore, events
     pitch.position.z = -4
     scene.add(pitch)
 
+    // --- Pitch markings: thin white lines laid flat on the grass ---
+    const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff })
+    const LINE_Y = 0.01 // just above the grass, avoids z-fighting flicker
+
+    function addLine(width: number, depth: number, x: number, z: number) {
+      const line = new THREE.Mesh(new THREE.PlaneGeometry(width, depth), lineMat)
+      line.rotation.x = -Math.PI / 2
+      line.position.set(x, LINE_Y, z)
+      scene.add(line)
+    }
+
+    // Halfway line (running across the pitch width, near our outfielder's row)
+    addLine(30, 0.1, 0, 0)
+
+    // Center circle (approximated as a thin ring)
+    const centerCircle = new THREE.Mesh(
+      new THREE.RingGeometry(2.9, 3.0, 48),
+      lineMat
+    )
+    centerCircle.rotation.x = -Math.PI / 2
+    centerCircle.position.set(0, LINE_Y, 0)
+    scene.add(centerCircle)
+
+    // Goal line (at the back, where the goalkeeper stands)
+    addLine(14, 0.1, 0, -9.5)
+
+    // Penalty box (in front of the goal line)
+    addLine(10, 0.1, 0, -5.5) // box's near edge
+    addLine(0.1, 4, -5, -7.5) // left side
+    addLine(0.1, 4, 5, -7.5) // right side
+
+    // Simple goal frame (posts + crossbar, as thin white boxes)
+    const postMat = new THREE.MeshStandardMaterial({ color: 0xffffff })
+    const postGeo = new THREE.BoxGeometry(0.12, 1.2, 0.12)
+    const leftPost = new THREE.Mesh(postGeo, postMat)
+    leftPost.position.set(-1.8, 0.6, -9.5)
+    scene.add(leftPost)
+    const rightPost = new THREE.Mesh(postGeo, postMat)
+    rightPost.position.set(1.8, 0.6, -9.5)
+    scene.add(rightPost)
+    const crossbar = new THREE.Mesh(
+      new THREE.BoxGeometry(3.72, 0.12, 0.12),
+      postMat
+    )
+    crossbar.position.set(0, 1.2, -9.5)
+    scene.add(crossbar)
+
     const BALL_REST = new THREE.Vector3(0.4, 0.12, 0.3)
     const ball = new THREE.Mesh(
       new THREE.SphereGeometry(0.12, 16, 16),
